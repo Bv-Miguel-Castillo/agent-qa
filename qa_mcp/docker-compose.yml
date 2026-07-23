@@ -1,0 +1,16 @@
+# version: "3.9"
+
+services:
+  mcp-agente-qa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-agente-qa:latest
+    container_name: mcp-agente-qa
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./documentacion_generada:/app/documentacion_generada
+    restart: unless-stopped
