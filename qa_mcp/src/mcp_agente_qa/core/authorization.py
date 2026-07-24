@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from .auth_contracts import TokenIdentity
-from .config import settings
+from .config import env
 from .exceptions import AuthError
 
 
 class ToolAuthorizationPolicy:
     def authorize(self, tool_name: str, identity: TokenIdentity) -> None:
-        required_permissions = settings.tool_permissions.get(tool_name)
+        required_permissions = env.tool_permissions.get(tool_name)
         if not required_permissions:
             return
 

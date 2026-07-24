@@ -8,7 +8,7 @@ from azure.identity import AzureCliCredential
 
 from .auth_contracts import CredentialProvider, CredentialRequest
 from .auth_context import normalize_access_token
-from .config import settings
+from .config import env
 
 
 class CredentialProviderChain:
@@ -40,11 +40,11 @@ class AzureCliTokenProvider:
         self._credential = AzureCliCredential()
 
     def resolve(self, request: CredentialRequest) -> str | None:
-        if not settings.use_azure_cli_token:
+        if not env.use_azure_cli_token:
             return None
 
         try:
-            access_token = self._credential.get_token(settings.azure_cli_resource).token
+            access_token = self._credential.get_token(env.azure_cli_resource).token
         except Exception:
             return None
         return normalize_access_token(access_token)
@@ -52,7 +52,7 @@ class AzureCliTokenProvider:
 
 class EntraAuthorizationCodePkceProvider:
     def __init__(self) -> None:
-        self._cache_path = (settings.entra_token_cache_path or "").strip()
+        self._cache_path = (env.entra_token_cache_path or "").strip()
         self._token_cache = msal.SerializableTokenCache()
         if self._cache_path:
             path = Path(self._cache_path)
@@ -60,31 +60,31 @@ class EntraAuthorizationCodePkceProvider:
                 self._token_cache.deserialize(path.read_text(encoding="utf-8"))
 
     def resolve(self, request: CredentialRequest) -> str | None:
-        if not settings.entra_client_id:
+        if not env.entra_client_id:
             return None
 
-        authority = settings.entra_authority.rstrip("/")
-        if settings.tenant_id:
-            authority = f"{authority}/{settings.tenant_id}"
+        authority = env.entra_authority.rstrip("/")
+        if env.tenant_id:
+            authority = f"{authority}/{env.tenant_id}"
 
         app = msal.PublicClientApplication(
-            client_id=settings.entra_client_id,
+            client_id=env.entra_client_id,
             authority=authority,
             token_cache=self._token_cache,
         )
 
         accounts = app.get_accounts()
         if accounts:
-            result = app.acquire_token_silent(scopes=settings.entra_scopes, account=accounts[0])
+            result = app.acquire_token_silent(scopes=env.entra_scopes, account=accounts[0])
             if result and result.get("access_token"):
                 self._persist_cache()
                 return normalize_access_token(result["access_token"])
 
-        if request.authorization_code and request.code_verifier and settings.entra_redirect_uri:
+        if request.authorization_code and request.code_verifier and env.entra_redirect_uri:
             result = app.acquire_token_by_authorization_code(
                 request.authorization_code,
-                scopes=settings.entra_scopes,
-                redirect_uri=settings.entra_redirect_uri,
+                scopes=env.entra_scopes,
+                redirect_uri=env.entra_redirect_uri,
                 code_verifier=request.code_verifier,
             )
             if result and result.get("access_token"):

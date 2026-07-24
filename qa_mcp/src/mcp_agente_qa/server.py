@@ -2,7 +2,7 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from .core.config import settings
+from .core.config import env
 from .features.collect_documentation_data.tool import register_collect_documentation_data
 from .features.collect_plan_data.tool import register_collect_plan_data
 from .features.extract_docx_text.tool import register_extract_docx_text
@@ -14,12 +14,8 @@ from .features.regenerate_base_template.tool import register_regenerate_base_tem
 
 def create_server() -> FastMCP:
     mcp = FastMCP(
-        "MCP Agente QA",
-        host="0.0.0.0",
-        port=8000,
-        mount_path="/",
-        streamable_http_path="/mcp",
-    )
+        "MCP Agente QA"
+        )
 
     register_collect_documentation_data(mcp)
     register_regenerate_base_template(mcp)
@@ -33,7 +29,7 @@ def create_server() -> FastMCP:
 
 def main() -> None:
     server = create_server()
-    server.run(transport=settings.transport)
+    server.run(transport=env.TRANSPORT)
 
 
 if __name__ == "__main__":

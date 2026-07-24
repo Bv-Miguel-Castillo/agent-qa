@@ -4,7 +4,7 @@ import httpx
 
 from mcp_agente_qa.core.auth_contracts import TokenIdentity
 from mcp_agente_qa.core.auth import extract_bearer_token_from_context, token_validator
-from mcp_agente_qa.core.config import settings
+from mcp_agente_qa.core.config import env
 from mcp_agente_qa.core.credential_providers import EntraAuthorizationCodePkceProvider
 from mcp_agente_qa.core.auth_contracts import CredentialRequest
 from mcp_agente_qa.core.exceptions import AuthError
@@ -73,8 +73,10 @@ def test_build_authenticated_session_accepts_bearer_prefixed_token(monkeypatch) 
 
 
 def test_build_authenticated_session_requires_available_credentials(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "entra_client_id", None)
-    monkeypatch.setattr(settings, "use_azure_cli_token", False)
+    monkeypatch.setattr(env
+, "entra_client_id", None)
+    monkeypatch.setattr(env
+, "use_azure_cli_token", False)
 
     try:
         token_validator.build_authenticated_session(None, context_access_token=None)
@@ -85,11 +87,16 @@ def test_build_authenticated_session_requires_available_credentials(monkeypatch)
 
 
 def test_entra_provider_resolves_pkce_authorization_code(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "entra_client_id", "client-id")
-    monkeypatch.setattr(settings, "entra_authority", "https://login.microsoftonline.com")
-    monkeypatch.setattr(settings, "tenant_id", "tenant-123")
-    monkeypatch.setattr(settings, "entra_redirect_uri", "http://localhost/callback")
-    monkeypatch.setattr(settings, "entra_scopes_csv", "scope-a,scope-b")
+    monkeypatch.setattr(env
+, "entra_client_id", "client-id")
+    monkeypatch.setattr(env
+, "entra_authority", "https://login.microsoftonline.com")
+    monkeypatch.setattr(env
+, "tenant_id", "tenant-123")
+    monkeypatch.setattr(env
+, "entra_redirect_uri", "http://localhost/callback")
+    monkeypatch.setattr(env
+, "entra_scopes_csv", "scope-a,scope-b")
 
     captured: dict[str, object] = {}
 

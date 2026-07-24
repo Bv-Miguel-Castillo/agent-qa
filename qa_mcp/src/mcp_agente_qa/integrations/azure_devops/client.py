@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 import httpx
 
-from ...core.config import settings
+from ...core.config import env
 from ...core.exceptions import AzureDevOpsError
 
 
@@ -14,9 +14,9 @@ class AzureDevOpsClient:
 
     def __init__(self, access_token: str, user_email: str | None = None) -> None:
         self._access_token = access_token.strip()
-        self._base_url = settings.azure_devops_base_url.rstrip("/")
-        self._api_version = settings.azure_devops_api_version
-        self._timeout = settings.request_timeout_seconds
+        self._base_url = env.azure_devops_base_url.rstrip("/")
+        self._api_version = env.azure_devops_api_version
+        self._timeout = env.request_timeout_seconds
 
     @staticmethod
     def encode_project(project: str) -> str:

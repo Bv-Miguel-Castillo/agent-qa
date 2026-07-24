@@ -8,7 +8,7 @@ from jwt.exceptions import DecodeError, InvalidTokenError
 
 from .auth_contracts import TokenIdentity
 from .auth_context import normalize_access_token
-from .config import settings
+from .config import env
 from .exceptions import AuthError
 
 
@@ -38,14 +38,14 @@ class JwtTokenValidator:
         return identity
 
     def _decode_claims(self, token: str) -> Dict[str, Any]:
-        if settings.allow_insecure_token_decode:
+        if env.allow_insecure_token_decode:
             claims = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
             token_tid = claims.get("tid")
-            if token_tid and settings.tenant_id and token_tid.lower() != settings.tenant_id.lower():
+            if token_tid and env.tenant_id and token_tid.lower() != env.tenant_id.lower():
                 raise AuthError("Token tenant mismatch")
             return claims
 
-        if not settings.tenant_id:
+        if not env.tenant_id:
             raise AuthError("MCP_QA_TENANT_ID is required for Microsoft Entra ID validation.")
 
         headers = jwt.get_unverified_header(token)
@@ -58,19 +58,19 @@ class JwtTokenValidator:
             token,
             signing_key,
             algorithms=["RS256"],
-            audience=settings.token_audiences,
+            audience=env.token_audiences,
         )
         token_tid = claims.get("tid")
-        if token_tid and settings.tenant_id and token_tid.lower() != settings.tenant_id.lower():
+        if token_tid and env.tenant_id and token_tid.lower() != env.tenant_id.lower():
             raise AuthError("Token tenant mismatch")
         return claims
 
     def _get_signing_key(self, kid: str) -> Any:
         if self._jwks_cache is None:
-            if not settings.tenant_id:
+            if not env.tenant_id:
                 raise AuthError("Tenant id not configured")
-            jwks_url = f"https://login.microsoftonline.com/{settings.tenant_id}/discovery/v2.0/keys"
-            response = httpx.get(jwks_url, timeout=settings.request_timeout_seconds)
+            jwks_url = f"https://login.microsoftonline.com/{env.tenant_id}/discovery/v2.0/keys"
+            response = httpx.get(jwks_url, timeout=env.request_timeout_seconds)
             response.raise_for_status()
             self._jwks_cache = response.json()
 
