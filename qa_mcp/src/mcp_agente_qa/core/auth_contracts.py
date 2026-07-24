@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -22,10 +22,6 @@ class AuthenticatedSession:
 
 @dataclass(frozen=True)
 class CredentialRequest:
-    access_token: str | None = None
-    context_access_token: str | None = None
-    authorization_code: str | None = None
-    code_verifier: str | None = None
     expected_email: str | None = None
 
 

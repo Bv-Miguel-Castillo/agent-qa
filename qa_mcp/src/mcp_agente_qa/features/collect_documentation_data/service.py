@@ -15,12 +15,8 @@ from .models import CollectDocumentationDataInput
 
 
 class CollectDocumentationDataService:
-    def execute(self, payload: CollectDocumentationDataInput, context_access_token: str | None = None) -> dict:
-        session = token_validator.build_authenticated_session(
-            payload.access_token,
-            context_access_token=context_access_token,
-            expected_email=payload.user_email,
-        )
+    def execute(self, payload: CollectDocumentationDataInput) -> dict:
+        session = token_validator.build_authenticated_session(expected_email=payload.user_email)
         token_validator.authorize_tool("collect_documentation_data", session.identity)
         client = AzureDevOpsClient(
             session.access_token,

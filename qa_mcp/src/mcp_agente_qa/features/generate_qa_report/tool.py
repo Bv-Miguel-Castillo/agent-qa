@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from mcp.server.fastmcp import Context, FastMCP
-
-from ...core.auth import extract_bearer_token_from_context
+from mcp.server.fastmcp import FastMCP
 
 from .models import GenerateQaReportInput
 from .service import GenerateQaReportService
@@ -25,18 +23,14 @@ def register_generate_qa_report(mcp: FastMCP) -> None:
         project: str,
         test_plan_id: int,
         user_email: str | None = None,
-        access_token: str | None = None,
         include_evidence: bool = True,
         report_date: str | None = None,
-        ctx: Context | None = None,
     ) -> dict:
-        context_access_token = extract_bearer_token_from_context(ctx)
         payload = GenerateQaReportInput(
             user_email=user_email,
-            access_token=access_token,
             project=project,
             test_plan_id=test_plan_id,
             include_evidence=include_evidence,
             report_date=report_date,
         )
-        return service.execute(payload, context_access_token=context_access_token)
+        return service.execute(payload)

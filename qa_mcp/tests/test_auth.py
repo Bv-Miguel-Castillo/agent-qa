@@ -3,26 +3,157 @@ from __future__ import annotations
 import httpx
 
 from mcp_agente_qa.core.auth_contracts import TokenIdentity
-from mcp_agente_qa.core.auth import extract_bearer_token_from_context, token_validator
-from mcp_agente_qa.core.config import env
-from mcp_agente_qa.core.credential_providers import EntraAuthorizationCodePkceProvider
+from mcp_agente_qa.core.auth import token_validator
 from mcp_agente_qa.core.auth_contracts import CredentialRequest
+from mcp_agente_qa.core.credential_providers import (
+    EntraDeviceCodeConfigService,
+    EntraDeviceCodeProvider,
+)
 from mcp_agente_qa.core.exceptions import AuthError
 from mcp_agente_qa.integrations.azure_devops.client import AzureDevOpsClient
 
 
-def test_build_authenticated_session_reuses_delegated_token(monkeypatch) -> None:
+def test_device_code_config_service_reads_required_secrets() -> None:
+    class DummyKeyVaultClient:
+        def get_secret(self, secret_name: str) -> str:
+            if secret_name == "MCPQA-ADO-CLIENT-ID":
+                return "ado-client-id"
+            if secret_name == "MCPQA-ADO-TENANT-ID":
+                return "ado-tenant-id"
+            return ""
+
+    service = EntraDeviceCodeConfigService(keyvault_client=DummyKeyVaultClient())
+    config = service.get()
+
+    assert config.client_id == "ado-client-id"
+    assert config.tenant_id == "ado-tenant-id"
+
+
+def test_device_code_config_service_raises_when_secrets_missing() -> None:
+    class DummyKeyVaultClient:
+        def get_secret(self, secret_name: str) -> str:
+            del secret_name
+            return ""
+
+    service = EntraDeviceCodeConfigService(keyvault_client=DummyKeyVaultClient())
+    try:
+        service.get()
+    except AuthError as exc:
+        assert "MCPQA-ADO-CLIENT-ID" in str(exc)
+        assert "MCPQA-ADO-TENANT-ID" in str(exc)
+    else:
+        raise AssertionError("Expected AuthError when Key Vault secrets are not available")
+
+
+def test_device_code_provider_prefers_silent_token() -> None:
+    class DummyConfigService:
+        def get(self):
+            return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
+
+    class DummyApp:
+        def __init__(self, client_id: str, authority: str, token_cache=None) -> None:
+            del token_cache
+            assert client_id == "app-id"
+            assert authority == "https://login.microsoftonline.com/tenant-id"
+
+        @staticmethod
+        def get_accounts():
+            return [{"home_account_id": "abc"}]
+
+        @staticmethod
+        def acquire_token_silent(scopes, account):
+            del scopes, account
+            return {"access_token": "silent-token"}
+
+    provider = EntraDeviceCodeProvider(
+        config_service=DummyConfigService(),
+        app_factory=DummyApp,
+    )
+    token = provider.resolve(CredentialRequest())
+    assert token == "silent-token"
+
+
+def test_device_code_provider_returns_device_flow_token() -> None:
+    class DummyConfigService:
+        def get(self):
+            return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
+
+    class DummyApp:
+        def __init__(self, client_id: str, authority: str, token_cache=None) -> None:
+            del client_id, authority, token_cache
+
+        @staticmethod
+        def get_accounts():
+            return []
+
+        @staticmethod
+        def initiate_device_flow(scopes):
+            del scopes
+            return {
+                "user_code": "ABC-123",
+                "verification_uri": "https://microsoft.com/devicelogin",
+            }
+
+        @staticmethod
+        def acquire_token_by_device_flow(device_flow):
+            assert device_flow.get("user_code") == "ABC-123"
+            return {"access_token": "device-token"}
+
+    provider = EntraDeviceCodeProvider(
+        config_service=DummyConfigService(),
+        app_factory=DummyApp,
+    )
+    token = provider.resolve(CredentialRequest())
+    assert token == "device-token"
+
+
+def test_device_code_provider_requires_user_code_in_flow() -> None:
+    class DummyConfigService:
+        def get(self):
+            return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
+
+    class DummyApp:
+        def __init__(self, client_id: str, authority: str, token_cache=None) -> None:
+            del client_id, authority, token_cache
+
+        @staticmethod
+        def get_accounts():
+            return []
+
+        @staticmethod
+        def initiate_device_flow(scopes):
+            del scopes
+            return {"error_description": "flow failed"}
+
+    provider = EntraDeviceCodeProvider(
+        config_service=DummyConfigService(),
+        app_factory=DummyApp,
+    )
+    try:
+        provider.resolve(CredentialRequest())
+    except AuthError as exc:
+        assert "Device Code Flow" in str(exc)
+    else:
+        raise AssertionError("Expected AuthError when MSAL does not return a user code")
+
+
+def test_build_authenticated_session_uses_resolved_token(monkeypatch) -> None:
+    monkeypatch.setattr(
+        token_validator._session_service._resolver,
+        "resolve",
+        lambda request: "delegated-token",
+    )
     monkeypatch.setattr(
         token_validator._session_service._validator,
         "validate",
         lambda token, expected_email=None: TokenIdentity(
-            email="user@example.com",
+            email=expected_email,
             subject="subject-123",
             tenant_id="tenant-123",
             roles=["qa.test.read"],
             scopes=["vso.work_write"],
             raw_claims={
-                "preferred_username": "user@example.com",
+                "preferred_username": expected_email,
                 "sub": "subject-123",
                 "tid": "tenant-123",
                 "roles": ["qa.test.read"],
@@ -31,142 +162,11 @@ def test_build_authenticated_session_reuses_delegated_token(monkeypatch) -> None
         ),
     )
 
-    session = token_validator.build_authenticated_session(
-        " delegated-token ",
-        context_access_token="context-token",
-        expected_email="user@example.com",
-    )
+    session = token_validator.build_authenticated_session(expected_email="user@example.com")
 
     assert session.access_token == "delegated-token"
     assert session.identity.email == "user@example.com"
     assert session.identity.subject == "subject-123"
-
-
-def test_build_authenticated_session_accepts_bearer_prefixed_token(monkeypatch) -> None:
-    monkeypatch.setattr(
-        token_validator._session_service._validator,
-        "validate",
-        lambda token, expected_email=None: TokenIdentity(
-            email="user@example.com",
-            subject=token,
-            tenant_id="tenant-123",
-            roles=[],
-            scopes=[],
-            raw_claims={
-                "preferred_username": "user@example.com",
-                "sub": token,
-                "tid": "tenant-123",
-                "roles": [],
-                "scp": "",
-            },
-        ),
-    )
-
-    session = token_validator.build_authenticated_session(
-        "Bearer delegated-token",
-        context_access_token="Bearer context-token",
-        expected_email="user@example.com",
-    )
-
-    assert session.access_token == "delegated-token"
-    assert session.identity.subject == "delegated-token"
-
-
-def test_build_authenticated_session_requires_available_credentials(monkeypatch) -> None:
-    monkeypatch.setattr(env
-, "entra_client_id", None)
-    monkeypatch.setattr(env
-, "use_azure_cli_token", False)
-
-    try:
-        token_validator.build_authenticated_session(None, context_access_token=None)
-    except AuthError as exc:
-        assert "User is not authenticated" in str(exc)
-    else:
-        raise AssertionError("Expected AuthError when no credential source is available")
-
-
-def test_entra_provider_resolves_pkce_authorization_code(monkeypatch) -> None:
-    monkeypatch.setattr(env
-, "entra_client_id", "client-id")
-    monkeypatch.setattr(env
-, "entra_authority", "https://login.microsoftonline.com")
-    monkeypatch.setattr(env
-, "tenant_id", "tenant-123")
-    monkeypatch.setattr(env
-, "entra_redirect_uri", "http://localhost/callback")
-    monkeypatch.setattr(env
-, "entra_scopes_csv", "scope-a,scope-b")
-
-    captured: dict[str, object] = {}
-
-    class DummyApp:
-        def __init__(self, client_id: str, authority: str, token_cache=None) -> None:
-            captured["client_id"] = client_id
-            captured["authority"] = authority
-            captured["token_cache"] = token_cache
-
-        def get_accounts(self):
-            return []
-
-        def acquire_token_by_authorization_code(self, authorization_code, scopes, redirect_uri, code_verifier):
-            captured["authorization_code"] = authorization_code
-            captured["scopes"] = scopes
-            captured["redirect_uri"] = redirect_uri
-            captured["code_verifier"] = code_verifier
-            return {"access_token": "pkce-token"}
-
-    monkeypatch.setattr("mcp_agente_qa.core.credential_providers.msal.PublicClientApplication", DummyApp)
-
-    provider = EntraAuthorizationCodePkceProvider()
-    token = provider.resolve(
-        CredentialRequest(
-            authorization_code="auth-code",
-            code_verifier="pkce-verifier",
-        )
-    )
-
-    assert token == "pkce-token"
-    assert captured["client_id"] == "client-id"
-    assert captured["authority"] == "https://login.microsoftonline.com/tenant-123"
-    assert captured["authorization_code"] == "auth-code"
-    assert captured["scopes"] == ["scope-a", "scope-b"]
-    assert captured["redirect_uri"] == "http://localhost/callback"
-    assert captured["code_verifier"] == "pkce-verifier"
-
-
-def test_extract_bearer_token_from_context_prefers_azure_platform_token_header() -> None:
-    class DummyRequest:
-        headers = {
-            "Authorization": "Bearer ignored-token",
-            "X-MS-TOKEN-AAD-ACCESS-TOKEN": "Bearer delegated-token",
-        }
-
-    class DummyRequestContext:
-        request = DummyRequest()
-
-    class DummyContext:
-        request_context = DummyRequestContext()
-
-    assert extract_bearer_token_from_context(DummyContext()) == "delegated-token"
-
-
-def test_extract_bearer_token_from_context_reads_forwarded_header_from_scope() -> None:
-    class DummyRequest:
-        headers = None
-        scope = {
-            "headers": [
-                (b"x-forwarded-access-token", b"Bearer delegated-token"),
-            ]
-        }
-
-    class DummyRequestContext:
-        request = DummyRequest()
-
-    class DummyContext:
-        request_context = DummyRequestContext()
-
-    assert extract_bearer_token_from_context(DummyContext()) == "delegated-token"
 
 
 def test_azure_devops_client_uses_bearer_token_passthrough(monkeypatch) -> None:

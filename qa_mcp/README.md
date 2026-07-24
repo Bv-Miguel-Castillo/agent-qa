@@ -6,7 +6,7 @@ MCP server implemented fully in Python with modular, feature-based architecture.
 
 - Python-only implementation (no PowerShell or Bash execution in runtime logic).
 - Strict 1:1 conversion from every `.ps1` found in `assets` to one MCP tool.
-- OAuth Identity Passthrough support (token provided by the client).
+- OAuth 2.0 delegated authentication with Microsoft Entra ID using Device Code Flow (MSAL).
 - Azure DevOps reusable integration modules.
 - Dockerfile + docker-compose + environment variable setup.
 - Basic tests including 1:1 mapping validation.
@@ -61,54 +61,50 @@ src/mcp_agente_qa/
   server.py
 ```
 
-## Authentication Flow (Microsoft Entra ID Token Passthrough)
+## Authentication Flow (Microsoft Entra ID Device Code)
 
 Expected flow:
 
-1. User authenticates with Microsoft Entra ID using the MCP client.
-2. MCP client or Azure platform authentication forwards the delegated access token to MCP via `Authorization: Bearer ...`, `X-MS-TOKEN-AAD-ACCESS-TOKEN`, or `X-Forwarded-Access-Token`.
-3. MCP validates token claims and extracts:
+1. MCP reads app registration secrets from Azure Key Vault:
+  - `MCPQA-ADO-CLIENT-ID`
+  - `MCPQA-ADO-TENANT-ID`
+2. MCP starts device authentication with MSAL:
+  - `PublicClientApplication(client_id=client_id, authority="https://login.microsoftonline.com/{tenant_id}")`
+3. MSAL generates device code instructions and the user signs in with a corporate account.
+4. Microsoft Entra ID returns an access token.
+5. MCP validates token claims and extracts:
   - `email`
   - `tenant_id`
   - `subject`
   - `roles` and `scopes` when present
-4. MCP authorizes tool execution using configured permissions per tool.
-5. MCP calls Azure DevOps with the validated user token for the current request only.
+6. MCP authorizes tool execution using configured permissions per tool.
+7. MCP calls Azure DevOps using `Authorization: Bearer <access_token>` and Azure DevOps enforces user delegated permissions.
 
-Server does not run OAuth login flow, does not exchange the delegated token, and does not store user credentials.
+No alternate auth path is active (no PAT, no static token, no forwarded token passthrough).
 
 ## Environment variables
 
-Use `.env.example` as a template.
+Configure in `.env`:
 
-Required for production token validation:
+Required:
 
-- `MCP_QA_TENANT_ID`
-- `MCP_QA_TOKEN_AUDIENCES_CSV`
-- `MCP_QA_REQUIRE_TOKEN_VALIDATION=true`
-- `MCP_QA_ALLOW_INSECURE_TOKEN_DECODE=false`
+- `CLIENT_ID` (managed identity or app identity that can read Azure Key Vault)
+- `TENANT_ID`
+- `KEY_VAULT_NAME`
+- `AZURE_DEVOPS_ORGANIZATION`
 
-Recommended for Azure container hosting:
+Optional:
+- `AZURE_DEVOPS_RESOURCE_ID` (defaults to Azure DevOps resource id)
+- `AZURE_DEVOPS_API_VERSION`
+- `REQUEST_TIMEOUT_SECONDS`
+- `ALLOW_INSECURE_TOKEN_DECODE` (for local debugging only)
+- `TOOL_PERMISSIONS` (JSON map of tool -> required permissions)
+- `DEVICE_CODE_CLIENT_ID_SECRET_NAME` (default: `MCPQA-ADO-CLIENT-ID`)
+- `DEVICE_CODE_TENANT_ID_SECRET_NAME` (default: `MCPQA-ADO-TENANT-ID`)
 
-- Enable Microsoft Entra authentication on the container ingress or upstream gateway.
-- Forward the delegated access token in `Authorization`, `X-MS-TOKEN-AAD-ACCESS-TOKEN`, or `X-Forwarded-Access-Token`.
-- If you rely on Azure platform auth headers, ensure the upstream component forwards an access token for the Azure DevOps resource and does not strip it before the request reaches MCP.
-
-Optional for authorization by role/scope:
-
-- `MCP_QA_TOOL_PERMISSIONS_JSON` (JSON map of tool -> required permissions)
-
-Optional for local manual token testing:
-
-- `MCP_QA_STATIC_ACCESS_TOKEN` (local fallback token when request headers and `access_token` are not provided)
-
-Optional for Azure CLI token fallback:
-
-- `MCP_QA_USE_AZURE_CLI_TOKEN=true`
-- `MCP_QA_AZURE_CLI_RESOURCE=499b84ac-1321-427f-aa17-267ca6975798`
-- `MCP_QA_AZURE_CLI_TIMEOUT_SECONDS=15`
-
-When enabled, the server runs `az account get-access-token --resource <resource>` if no request token and no static token are available.
+Azure Key Vault must contain:
+- `MCPQA-ADO-CLIENT-ID`
+- `MCPQA-ADO-TENANT-ID`
 
 ## Run locally
 
@@ -121,7 +117,6 @@ python main.py
 ## Run with Docker
 
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
 

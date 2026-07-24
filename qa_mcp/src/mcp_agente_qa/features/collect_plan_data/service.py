@@ -13,12 +13,8 @@ from .models import CollectPlanDataInput
 
 
 class CollectPlanDataService:
-    def execute(self, payload: CollectPlanDataInput, context_access_token: str | None = None) -> dict:
-        session = token_validator.build_authenticated_session(
-            payload.access_token,
-            context_access_token=context_access_token,
-            expected_email=payload.user_email,
-        )
+    def execute(self, payload: CollectPlanDataInput) -> dict:
+        session = token_validator.build_authenticated_session(expected_email=payload.user_email)
         token_validator.authorize_tool("collect_plan_data", session.identity)
         client = AzureDevOpsClient(
             session.access_token,

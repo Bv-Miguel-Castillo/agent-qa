@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from .auth_contracts import AuthenticatedSession, CredentialRequest
 from .credential_providers import CredentialProviderChain
@@ -15,7 +15,8 @@ class AuthSessionService:
         effective_token = self._resolver.resolve(request)
         if not effective_token:
             raise AuthError(
-                "User is not authenticated. Send a Microsoft Entra ID token in the Authorization header (Bearer), X-MS-TOKEN-AAD-ACCESS-TOKEN, or X-Forwarded-Access-Token."
+                "No fue posible adquirir un token delegado de Microsoft Entra ID mediante Device Code Flow. "
+                "Inicie sesion con su cuenta corporativa cuando se muestre el codigo y URL de verificacion."
             )
 
         identity = self._validator.validate(effective_token, expected_email=request.expected_email)

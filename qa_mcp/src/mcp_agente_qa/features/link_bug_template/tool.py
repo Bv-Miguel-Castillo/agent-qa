@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from mcp.server.fastmcp import Context, FastMCP
-
-from ...core.auth import extract_bearer_token_from_context
+from mcp.server.fastmcp import FastMCP
 
 from .models import LinkBugTemplateInput
 from .service import LinkBugTemplateService
@@ -18,7 +16,6 @@ def register_link_bug_template(mcp: FastMCP) -> None:
     def link_bug_template(
         project: str,
         user_email: str | None = None,
-        access_token: str | None = None,
         action: str = "link",
         bug_id: int | None = None,
         hu_id: int | None = None,
@@ -31,12 +28,9 @@ def register_link_bug_template(mcp: FastMCP) -> None:
         tags: str | None = None,
         effort: float | int | None = None,
         test_case_id: int | None = None,
-        ctx: Context | None = None,
     ) -> dict:
-        context_access_token = extract_bearer_token_from_context(ctx)
         payload = LinkBugTemplateInput(
             user_email=user_email,
-            access_token=access_token,
             project=project,
             action=action,
             bug_id=bug_id,
@@ -51,4 +45,4 @@ def register_link_bug_template(mcp: FastMCP) -> None:
             effort=effort,
             test_case_id=test_case_id,
         )
-        return service.execute(payload, context_access_token=context_access_token)
+        return service.execute(payload)

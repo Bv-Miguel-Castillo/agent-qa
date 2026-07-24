@@ -23,16 +23,15 @@ class GenerateQaReportService:
     def __init__(self) -> None:
         self._collector = CollectDocumentationDataService()
 
-    def execute(self, payload: GenerateQaReportInput, context_access_token: str | None = None) -> dict:
+    def execute(self, payload: GenerateQaReportInput) -> dict:
         collect_input = CollectDocumentationDataInput(
             user_email=payload.user_email,
-            access_token=payload.access_token,
             project=payload.project,
             test_plan_id=payload.test_plan_id,
             include_evidence=payload.include_evidence,
             evidence_dir=None,
         )
-        data = self._collector.execute(collect_input, context_access_token=context_access_token)
+        data = self._collector.execute(collect_input)
 
         out_dir = tempfile.mkdtemp(prefix="reporte_qa_")
         docx_path = build_report_docx(
