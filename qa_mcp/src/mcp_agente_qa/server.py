@@ -14,8 +14,12 @@ from .features.regenerate_base_template.tool import register_regenerate_base_tem
 
 def create_server() -> FastMCP:
     mcp = FastMCP(
-        "MCP Agente QA"
-        )
+        "MCP Agente QA",
+        host="0.0.0.0",
+        port=8000,
+        mount_path="/",
+        streamable_http_path="/mcp",
+    )
 
     register_collect_documentation_data(mcp)
     register_regenerate_base_template(mcp)

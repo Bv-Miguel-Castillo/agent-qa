@@ -24,16 +24,16 @@ tracer.span(name="example_span")
 ```
 """
 
+from .enviroment.enviroments import get_environment_variables as env
 import logging
 import sys
-from .enviroment.enviroments import get_environment_variables
 from opencensus.ext.azure.log_exporter import AzureLogHandler
 from opencensus.ext.azure.trace_exporter import AzureExporter
 from opencensus.trace.tracer import Tracer
 from opencensus.trace.samplers import ProbabilitySampler
 
 
-env = get_environment_variables()  # Retrieve environment variables using the get_environment_variables function.
+env = env()  # Retrieve environment variables using the get_environment_variables function.
 
 # Initialize the logger for the botframework application.
 

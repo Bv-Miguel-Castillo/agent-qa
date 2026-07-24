@@ -1,6 +1,5 @@
 ﻿from __future__ import annotations
 
-import json
 import re
 from html import unescape
 
@@ -18,8 +17,7 @@ class ParseWorkitemService:
     _RE_TAGS = re.compile(r"<[^>]+>")
 
     def execute(self, payload: ParseWorkitemInput) -> dict:
-        with open(payload.file_path, "r", encoding="utf-8") as file_obj:
-            work_item = json.load(file_obj)
+        work_item = payload.work_item
 
         fields = work_item.get("fields") or {}
         relations = work_item.get("relations") or []
@@ -88,7 +86,7 @@ class ParseWorkitemService:
             size_kb = round(cls._as_float(size_raw) / 1024, 1)
 
             url = cls._as_text(relation.get("url"))
-            attachment_id = url.rstrip("/").rsplit("/", 1)[-1] if url else ""
+            attachment_id = (url.rstrip("/").rsplit("/", 1)[-1] if url else "")
 
             attachments.append(
                 ParseWorkitemAttachment(
@@ -118,4 +116,3 @@ class ParseWorkitemService:
             return int(value) if value is not None else None
         except (TypeError, ValueError):
             return None
-

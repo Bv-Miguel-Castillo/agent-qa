@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from mcp_agente_qa.core.auth_contracts import TokenIdentity
+from core.auth_contracts import TokenIdentity
 from mcp_agente_qa.core.auth import token_validator
 from mcp_agente_qa.core.auth_contracts import CredentialRequest
 from mcp_agente_qa.core.credential_providers import (

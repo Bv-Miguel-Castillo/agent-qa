@@ -6,6 +6,23 @@ PyJWT>=2.9.0
 python-docx>=1.1.2
 python-dotenv>=1.0.1
 msal>=1.31.0
-azure-identity>=1.17.1
-azure-keyvault-secrets>=4.8.0
 pytest>=8.3.0
+uvicorn[standard]>=0.30.0
+# azure-identity:
+# Official Azure SDK package to interact with Azure Identity services.
+# Used for authenticating and obtaining tokens for Azure resources.
+azure-identity>=1.0.0,<2.0.0
+
+# azure-keyvault-secrets:
+# Official Azure SDK package to interact with Azure Key Vault.
+# Used to securely store and retrieve sensitive information like API keys and secrets.
+azure-keyvault-secrets>=4.0.0,<5.0.0
+
+# -----------------------------------------------------------------------------
+# TELEMETRY AND LOGGING
+# -----------------------------------------------------------------------------
+
+# opencensus-ext-azure:
+# Integration of OpenCensus with Azure Monitor.
+# Allows tracing and telemetry data (like spans, metrics) to be sent to Azure Application Insights.
+opencensus-ext-azure>=1.0.0,<2.0.0
