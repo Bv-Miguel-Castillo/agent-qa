@@ -1,24 +1,34 @@
 from __future__ import annotations
 
 import httpx
-import subprocess
 
+from mcp_agente_qa.core.auth_contracts import TokenIdentity
 from mcp_agente_qa.core.auth import extract_bearer_token_from_context, token_validator
 from mcp_agente_qa.core.config import settings
+from mcp_agente_qa.core.credential_providers import EntraAuthorizationCodePkceProvider
+from mcp_agente_qa.core.auth_contracts import CredentialRequest
+from mcp_agente_qa.core.exceptions import AuthError
 from mcp_agente_qa.integrations.azure_devops.client import AzureDevOpsClient
 
 
 def test_build_authenticated_session_reuses_delegated_token(monkeypatch) -> None:
     monkeypatch.setattr(
-        token_validator,
-        "_decode_claims",
-        lambda token: {
-            "preferred_username": "user@example.com",
-            "sub": "subject-123",
-            "tid": "tenant-123",
-            "roles": ["qa.test.read"],
-            "scp": "vso.work_write",
-        },
+        token_validator._session_service._validator,
+        "validate",
+        lambda token, expected_email=None: TokenIdentity(
+            email="user@example.com",
+            subject="subject-123",
+            tenant_id="tenant-123",
+            roles=["qa.test.read"],
+            scopes=["vso.work_write"],
+            raw_claims={
+                "preferred_username": "user@example.com",
+                "sub": "subject-123",
+                "tid": "tenant-123",
+                "roles": ["qa.test.read"],
+                "scp": "vso.work_write",
+            },
+        ),
     )
 
     session = token_validator.build_authenticated_session(
@@ -34,15 +44,22 @@ def test_build_authenticated_session_reuses_delegated_token(monkeypatch) -> None
 
 def test_build_authenticated_session_accepts_bearer_prefixed_token(monkeypatch) -> None:
     monkeypatch.setattr(
-        token_validator,
-        "_decode_claims",
-        lambda token: {
-            "preferred_username": "user@example.com",
-            "sub": token,
-            "tid": "tenant-123",
-            "roles": [],
-            "scp": "",
-        },
+        token_validator._session_service._validator,
+        "validate",
+        lambda token, expected_email=None: TokenIdentity(
+            email="user@example.com",
+            subject=token,
+            tenant_id="tenant-123",
+            roles=[],
+            scopes=[],
+            raw_claims={
+                "preferred_username": "user@example.com",
+                "sub": token,
+                "tid": "tenant-123",
+                "roles": [],
+                "scp": "",
+            },
+        ),
     )
 
     session = token_validator.build_authenticated_session(
@@ -55,58 +72,60 @@ def test_build_authenticated_session_accepts_bearer_prefixed_token(monkeypatch) 
     assert session.identity.subject == "delegated-token"
 
 
-def test_build_authenticated_session_uses_static_access_token_fallback(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "static_access_token", " Bearer static-token ")
-    monkeypatch.setattr(
-        token_validator,
-        "_decode_claims",
-        lambda token: {
-            "preferred_username": "user@example.com",
-            "sub": token,
-            "tid": "tenant-123",
-            "roles": [],
-            "scp": "",
-        },
+def test_build_authenticated_session_requires_available_credentials(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "entra_client_id", None)
+    monkeypatch.setattr(settings, "use_azure_cli_token", False)
+
+    try:
+        token_validator.build_authenticated_session(None, context_access_token=None)
+    except AuthError as exc:
+        assert "User is not authenticated" in str(exc)
+    else:
+        raise AssertionError("Expected AuthError when no credential source is available")
+
+
+def test_entra_provider_resolves_pkce_authorization_code(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "entra_client_id", "client-id")
+    monkeypatch.setattr(settings, "entra_authority", "https://login.microsoftonline.com")
+    monkeypatch.setattr(settings, "tenant_id", "tenant-123")
+    monkeypatch.setattr(settings, "entra_redirect_uri", "http://localhost/callback")
+    monkeypatch.setattr(settings, "entra_scopes_csv", "scope-a,scope-b")
+
+    captured: dict[str, object] = {}
+
+    class DummyApp:
+        def __init__(self, client_id: str, authority: str, token_cache=None) -> None:
+            captured["client_id"] = client_id
+            captured["authority"] = authority
+            captured["token_cache"] = token_cache
+
+        def get_accounts(self):
+            return []
+
+        def acquire_token_by_authorization_code(self, authorization_code, scopes, redirect_uri, code_verifier):
+            captured["authorization_code"] = authorization_code
+            captured["scopes"] = scopes
+            captured["redirect_uri"] = redirect_uri
+            captured["code_verifier"] = code_verifier
+            return {"access_token": "pkce-token"}
+
+    monkeypatch.setattr("mcp_agente_qa.core.credential_providers.msal.PublicClientApplication", DummyApp)
+
+    provider = EntraAuthorizationCodePkceProvider()
+    token = provider.resolve(
+        CredentialRequest(
+            authorization_code="auth-code",
+            code_verifier="pkce-verifier",
+        )
     )
 
-    session = token_validator.build_authenticated_session(
-        None,
-        context_access_token=None,
-        expected_email="user@example.com",
-    )
-
-    assert session.access_token == "static-token"
-    assert session.identity.subject == "static-token"
-
-
-def test_build_authenticated_session_uses_azure_cli_token_fallback(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "static_access_token", None)
-    monkeypatch.setattr(settings, "use_azure_cli_token", True)
-    monkeypatch.setattr(settings, "azure_cli_resource", "499b84ac-1321-427f-aa17-267ca6975798")
-    monkeypatch.setattr(settings, "azure_cli_timeout_seconds", 1.0)
-
-    class Completed:
-        returncode = 0
-        stderr = ""
-        stdout = '{"accessToken":"header.payload.signature"}'
-
-    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: Completed())
-    monkeypatch.setattr(
-        token_validator,
-        "_decode_claims",
-        lambda token: {
-            "preferred_username": "user@example.com",
-            "sub": token,
-            "tid": "tenant-123",
-            "roles": [],
-            "scp": "",
-        },
-    )
-
-    session = token_validator.build_authenticated_session(None, context_access_token=None)
-
-    assert session.access_token == "header.payload.signature"
-    assert session.identity.subject == "header.payload.signature"
+    assert token == "pkce-token"
+    assert captured["client_id"] == "client-id"
+    assert captured["authority"] == "https://login.microsoftonline.com/tenant-123"
+    assert captured["authorization_code"] == "auth-code"
+    assert captured["scopes"] == ["scope-a", "scope-b"]
+    assert captured["redirect_uri"] == "http://localhost/callback"
+    assert captured["code_verifier"] == "pkce-verifier"
 
 
 def test_extract_bearer_token_from_context_prefers_azure_platform_token_header() -> None:
