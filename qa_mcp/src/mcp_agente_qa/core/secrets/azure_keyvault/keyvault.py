@@ -1,6 +1,8 @@
 ﻿from __future__ import annotations
 
-from azure.identity import DefaultAzureCredential
+import re
+
+from azure.identity import ClientSecretCredential
 from azure.keyvault.secrets import SecretClient
 
 from ...enviroment.enviroments import get_environment_variables
@@ -17,8 +19,22 @@ class KeyVaultClient:
             raise ValueError("KEY_VAULT_NAME no esta configurado.")
 
         self._vault_url = f"https://{effective_name}.vault.azure.net"
-        managed_identity_client_id = env.CLIENT_ID.strip() if env.CLIENT_ID else None
-        self._credential = DefaultAzureCredential(managed_identity_client_id=managed_identity_client_id)
+
+        tenant_id = (env.AZURE_TENANT_ID or "").strip()
+        client_id = (env.AZURE_CLIENT_ID or "").strip()
+        client_secret = (env.AZURE_CLIENT_SECRET or "").strip()
+
+        if not tenant_id or not client_id or not client_secret:
+            raise ValueError(
+                "Faltan AZURE_TENANT_ID, AZURE_CLIENT_ID o AZURE_CLIENT_SECRET en el entorno. "
+                "Verifique el archivo .env y la carga de variables de entorno."
+            )
+
+        self._credential = ClientSecretCredential(
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
         self._client = SecretClient(vault_url=self._vault_url, credential=self._credential)
 
     def get_secret(self, secret_name: str) -> str:
@@ -48,8 +64,6 @@ class KeyVaultClient:
 
     @staticmethod
     def sanitize_name(name: str) -> str:
-        import re
-
         sanitized = re.sub(r"[^a-zA-Z0-9-]", "", name)
         if not sanitized:
             sanitized = "ASECRET"

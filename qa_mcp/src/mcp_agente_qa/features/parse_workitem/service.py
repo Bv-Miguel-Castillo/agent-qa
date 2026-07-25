@@ -21,8 +21,18 @@ class ParseWorkitemService:
 
         fields = work_item.get("fields") or {}
         relations = work_item.get("relations") or []
+        formats = work_item.get("multilineFieldsFormat") or {}
 
         assigned_to = self._parse_assigned_to(fields.get("System.AssignedTo"))
+
+        description = fields.get("System.Description")
+        acceptance = fields.get("Microsoft.VSTS.Common.AcceptanceCriteria")
+
+        if formats.get("System.Description") == "Html":
+            description = self._convert_html(description)
+
+        if formats.get("Microsoft.VSTS.Common.AcceptanceCriteria") == "Html":
+            acceptance = self._convert_html(acceptance)
 
         output = ParseWorkitemOutput(
             Id=self._as_int(fields.get("System.Id")),
@@ -32,10 +42,8 @@ class ParseWorkitemService:
             AreaPath=self._as_text(fields.get("System.AreaPath")),
             IterationPath=self._as_text(fields.get("System.IterationPath")),
             WorkItemType=self._as_text(fields.get("System.WorkItemType")),
-            Description=self._convert_html(fields.get("System.Description")),
-            AcceptanceCriteria=self._convert_html(
-                fields.get("Microsoft.VSTS.Common.AcceptanceCriteria")
-            ),
+            Description=self._as_text(description),
+            AcceptanceCriteria=self._as_text(acceptance),
             Attachments=self._parse_attachments(relations),
         )
         return output.model_dump()
@@ -86,7 +94,7 @@ class ParseWorkitemService:
             size_kb = round(cls._as_float(size_raw) / 1024, 1)
 
             url = cls._as_text(relation.get("url"))
-            attachment_id = (url.rstrip("/").rsplit("/", 1)[-1] if url else "")
+            attachment_id = url.rstrip("/").rsplit("/", 1)[-1] if url else ""
 
             attachments.append(
                 ParseWorkitemAttachment(

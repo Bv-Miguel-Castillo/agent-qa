@@ -33,8 +33,9 @@ class EnvironmentSettings(BaseSettings):
     APPINSIGHTS_KEY: Optional[str] = None
     REQUEST_TIMEOUT_SECONDS: int = 30
 
-    TENANT_ID: str
-    CLIENT_ID: str
+    AZURE_TENANT_ID: str
+    AZURE_CLIENT_ID: str
+    AZURE_CLIENT_SECRET: str
     AZURE_DEVOPS_RESOURCE_ID: str = "499b84ac-1321-427f-aa17-267ca6975798"
 
     AZURE_DEVOPS_ORGANIZATION: str

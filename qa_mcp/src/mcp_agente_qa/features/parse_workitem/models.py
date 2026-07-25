@@ -1,10 +1,15 @@
 ﻿from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 class ParseWorkitemInput(BaseModel):
-    file_path: str = Field(..., description="Path to Azure DevOps work item JSON file")
+    work_item: dict[str, Any] = Field(
+        ...,
+        description="Azure DevOps work item JSON.",
+    )
 
 
 class ParseWorkitemAttachment(BaseModel):
@@ -24,3 +29,4 @@ class ParseWorkitemOutput(BaseModel):
     Description: str
     AcceptanceCriteria: str
     Attachments: list[ParseWorkitemAttachment]
+ 
