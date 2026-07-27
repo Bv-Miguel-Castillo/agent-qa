@@ -3,13 +3,13 @@ from __future__ import annotations
 from .auth_contracts import AuthenticatedSession, CredentialRequest, TokenIdentity
 from .auth_context import normalize_access_token
 from .authorization import ToolAuthorizationPolicy
-from .credential_providers import CredentialProviderChain, EntraDeviceCodeProvider
+from .credential_providers import CredentialProviderChain, EntraAuthorizationCodePkceProvider
 from .jwt_validation import JwtTokenValidator
 from .session_management import AuthSessionService
 
 
 def _build_default_session_service() -> AuthSessionService:
-    resolver = CredentialProviderChain([EntraDeviceCodeProvider()])
+    resolver = CredentialProviderChain([EntraAuthorizationCodePkceProvider()])
     return AuthSessionService(resolver, JwtTokenValidator())
 
 

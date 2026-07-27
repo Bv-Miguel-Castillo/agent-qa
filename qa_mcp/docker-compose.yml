@@ -11,6 +11,7 @@ services:
       - .env
     ports:
       - "8000:8000"
+      - "8400:8400"
     volumes:
       - ./documentacion_generada:/app/documentacion_generada
     restart: unless-stopped

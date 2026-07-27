@@ -35,7 +35,7 @@ class EnvironmentSettings(BaseSettings):
 
     AZURE_TENANT_ID: str
     AZURE_CLIENT_ID: str
-    AZURE_CLIENT_SECRET: str
+    AZURE_CLIENT_SECRET: str | None = None
     AZURE_DEVOPS_RESOURCE_ID: str = "499b84ac-1321-427f-aa17-267ca6975798"
 
     AZURE_DEVOPS_ORGANIZATION: str
@@ -46,9 +46,8 @@ class EnvironmentSettings(BaseSettings):
     TOKEN_AUDIENCES: str | None = None
     TOOL_PERMISSIONS: str = "{}"
     ALLOW_INSECURE_TOKEN_DECODE: bool = False
-
-    DEVICE_CODE_CLIENT_ID_SECRET_NAME: str = "MCPQA-ADO-CLIENT-ID"
-    DEVICE_CODE_TENANT_ID_SECRET_NAME: str = "MCPQA-ADO-TENANT-ID"
+    ENTRA_REDIRECT_URI: str = "http://localhost:8400/callback"
+    AUTH_CODE_TIMEOUT_SECONDS: int = 180
 
     class Config:
         env_file = get_env_filename()
@@ -57,7 +56,11 @@ class EnvironmentSettings(BaseSettings):
 
     @property
     def tenant_id(self) -> str:
-        return self.TENANT_ID
+        return self.AZURE_TENANT_ID
+
+    @property
+    def client_id(self) -> str:
+        return self.AZURE_CLIENT_ID
 
     @property
     def key_vault_name(self) -> str:
@@ -78,6 +81,14 @@ class EnvironmentSettings(BaseSettings):
     @property
     def allow_insecure_token_decode(self) -> bool:
         return self.ALLOW_INSECURE_TOKEN_DECODE
+
+    @property
+    def entra_redirect_uri(self) -> str:
+        return self.ENTRA_REDIRECT_URI
+
+    @property
+    def auth_code_timeout_seconds(self) -> int:
+        return self.AUTH_CODE_TIMEOUT_SECONDS
 
     @property
     def token_audiences(self) -> list[str]:

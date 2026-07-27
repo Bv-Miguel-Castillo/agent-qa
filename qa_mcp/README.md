@@ -6,7 +6,7 @@ MCP server implemented fully in Python with modular, feature-based architecture.
 
 - Python-only implementation (no PowerShell or Bash execution in runtime logic).
 - Strict 1:1 conversion from every `.ps1` found in `assets` to one MCP tool.
-- OAuth 2.0 delegated authentication with Microsoft Entra ID using Device Code Flow (MSAL).
+- OAuth 2.0 delegated authentication with Microsoft Entra ID using Authorization Code Flow + PKCE (MSAL).
 - Azure DevOps reusable integration modules.
 - Dockerfile + docker-compose + environment variable setup.
 - Basic tests including 1:1 mapping validation.
@@ -61,24 +61,32 @@ src/mcp_agente_qa/
   server.py
 ```
 
-## Authentication Flow (Microsoft Entra ID Device Code)
+## Authentication Flow (Microsoft Entra ID Authorization Code + PKCE)
 
 Expected flow:
 
 1. MCP reads app registration secrets from Azure Key Vault:
   - `MCPQA-ADO-CLIENT-ID`
   - `MCPQA-ADO-TENANT-ID`
-2. MCP starts device authentication with MSAL:
+2. MCP starts OAuth 2.0 Authorization Code Flow + PKCE with MSAL:
   - `PublicClientApplication(client_id=client_id, authority="https://login.microsoftonline.com/{tenant_id}")`
-3. MSAL generates device code instructions and the user signs in with a corporate account.
-4. Microsoft Entra ID returns an access token.
-5. MCP validates token claims and extracts:
+3. MCP opens the Microsoft Entra ID sign-in page in the browser.
+4. User signs in with a corporate Microsoft account.
+5. Microsoft Entra ID returns an Authorization Code through the local redirect callback.
+6. MCP exchanges the Authorization Code for an Access Token.
+7. MCP validates token claims and extracts:
   - `email`
   - `tenant_id`
   - `subject`
   - `roles` and `scopes` when present
-6. MCP authorizes tool execution using configured permissions per tool.
-7. MCP calls Azure DevOps using `Authorization: Bearer <access_token>` and Azure DevOps enforces user delegated permissions.
+8. MCP authorizes tool execution using configured permissions per tool.
+9. MCP calls Azure DevOps using `Authorization: Bearer <access_token>` and Azure DevOps enforces user delegated permissions.
+
+Notes for headless or Docker execution:
+
+- If the process cannot open a browser automatically, open the Entra ID URL manually and continue the flow.
+- Ensure the local callback URI is reachable from the user browser.
+- In Docker compose, expose callback port `8400` and keep `ENTRA_REDIRECT_URI=http://localhost:8400/callback`.
 
 No alternate auth path is active (no PAT, no static token, no forwarded token passthrough).
 
@@ -88,8 +96,8 @@ Configure in `.env`:
 
 Required:
 
-- `CLIENT_ID` (managed identity or app identity that can read Azure Key Vault)
-- `TENANT_ID`
+- `AZURE_CLIENT_ID` (managed identity or app identity that can read Azure Key Vault)
+- `AZURE_TENANT_ID`
 - `KEY_VAULT_NAME`
 - `AZURE_DEVOPS_ORGANIZATION`
 
@@ -99,8 +107,8 @@ Optional:
 - `REQUEST_TIMEOUT_SECONDS`
 - `ALLOW_INSECURE_TOKEN_DECODE` (for local debugging only)
 - `TOOL_PERMISSIONS` (JSON map of tool -> required permissions)
-- `DEVICE_CODE_CLIENT_ID_SECRET_NAME` (default: `MCPQA-ADO-CLIENT-ID`)
-- `DEVICE_CODE_TENANT_ID_SECRET_NAME` (default: `MCPQA-ADO-TENANT-ID`)
+- `ENTRA_REDIRECT_URI` (default: `http://localhost:8400/callback`)
+- `AUTH_CODE_TIMEOUT_SECONDS` (default: `180`)
 
 Azure Key Vault must contain:
 - `MCPQA-ADO-CLIENT-ID`

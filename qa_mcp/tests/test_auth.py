@@ -6,34 +6,37 @@ import httpx
 
 from core.auth import token_validator
 from core.auth_contracts import CredentialRequest, TokenIdentity
-from core.credential_providers import EntraDeviceCodeConfigService, EntraDeviceCodeProvider
+from core.credential_providers import EntraAuthorizationCodePkceProvider, EntraOAuthPkceConfigService
 from core.exceptions import AuthError
 from integrations.azure_devops.client import AzureDevOpsClient
 
 
-def test_device_code_config_service_reads_required_secrets() -> None:
-    class DummyKeyVaultClient:
-        def get_secret(self, secret_name: str) -> str:
-            if secret_name == "MCPQA-ADO-CLIENT-ID":
-                return "ado-client-id"
-            if secret_name == "MCPQA-ADO-TENANT-ID":
-                return "ado-tenant-id"
-            return ""
+def test_oauth_pkce_config_service_reads_required_secrets(monkeypatch) -> None:
+    async def fake_kv(secret_name: str, allow_extras: bool = False):
+        del allow_extras
+        if secret_name == "MCPQA-ADO-CLIENT-ID":
+            return "ado-client-id"
+        if secret_name == "MCPQA-ADO-TENANT-ID":
+            return "ado-tenant-id"
+        return ""
 
-    service = EntraDeviceCodeConfigService(keyvault_client=DummyKeyVaultClient())
+    monkeypatch.setattr("core.credential_providers.kv", fake_kv)
+
+    service = EntraOAuthPkceConfigService()
     config = asyncio.run(service.get())
 
     assert config.client_id == "ado-client-id"
     assert config.tenant_id == "ado-tenant-id"
 
 
-def test_device_code_config_service_raises_when_secrets_missing() -> None:
-    class DummyKeyVaultClient:
-        def get_secret(self, secret_name: str) -> str:
-            del secret_name
-            return ""
+def test_oauth_pkce_config_service_raises_when_secrets_missing(monkeypatch) -> None:
+    async def fake_kv(secret_name: str, allow_extras: bool = False):
+        del secret_name, allow_extras
+        return ""
 
-    service = EntraDeviceCodeConfigService(keyvault_client=DummyKeyVaultClient())
+    monkeypatch.setattr("core.credential_providers.kv", fake_kv)
+
+    service = EntraOAuthPkceConfigService()
     try:
         asyncio.run(service.get())
     except AuthError as exc:
@@ -43,7 +46,7 @@ def test_device_code_config_service_raises_when_secrets_missing() -> None:
         raise AssertionError("Expected AuthError when Key Vault secrets are not available")
 
 
-def test_device_code_provider_prefers_silent_token() -> None:
+def test_oauth_pkce_provider_prefers_silent_token() -> None:
     class DummyConfigService:
         async def get(self):
             return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
@@ -63,7 +66,7 @@ def test_device_code_provider_prefers_silent_token() -> None:
             del scopes, account
             return {"access_token": "silent-token"}
 
-    provider = EntraDeviceCodeProvider(
+    provider = EntraAuthorizationCodePkceProvider(
         config_service=DummyConfigService(),
         app_factory=DummyApp,
     )
@@ -71,41 +74,49 @@ def test_device_code_provider_prefers_silent_token() -> None:
     assert token == "silent-token"
 
 
-def test_device_code_provider_returns_device_flow_token() -> None:
+def test_oauth_pkce_provider_returns_auth_code_token() -> None:
     class DummyConfigService:
         async def get(self):
             return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
 
-    class DummyApp:
-        def __init__(self, client_id: str, authority: str, token_cache=None) -> None:
-            del client_id, authority, token_cache
-
+    class DummyReceiver:
         @staticmethod
-        def get_accounts():
-            return []
-
-        @staticmethod
-        def initiate_device_flow(scopes):
-            del scopes
+        def receive():
             return {
-                "user_code": "ABC-123",
-                "verification_uri": "https://microsoft.com/devicelogin",
+                "code": "auth-code",
+                "state": "expected-state",
             }
 
-        @staticmethod
-        def acquire_token_by_device_flow(device_flow):
-            assert device_flow.get("user_code") == "ABC-123"
-            return {"access_token": "device-token"}
+    class DummyApp:
+        def __init__(self, client_id: str, authority: str, token_cache=None) -> None:
+            del client_id, authority, token_cache
 
-    provider = EntraDeviceCodeProvider(
+        @staticmethod
+        def get_accounts():
+            return []
+
+        @staticmethod
+        def initiate_auth_code_flow(scopes, redirect_uri):
+            del scopes, redirect_uri
+            return {"auth_uri": "https://login.microsoftonline.com/authorize", "state": "expected-state"}
+
+        @staticmethod
+        def acquire_token_by_auth_code_flow(auth_flow, auth_response):
+            assert auth_flow.get("state") == "expected-state"
+            assert auth_response.get("code") == "auth-code"
+            return {"access_token": "auth-code-token"}
+
+    provider = EntraAuthorizationCodePkceProvider(
         config_service=DummyConfigService(),
         app_factory=DummyApp,
+        browser_opener=lambda _: True,
+        callback_receiver=DummyReceiver(),
     )
     token = asyncio.run(provider.resolve(CredentialRequest()))
-    assert token == "device-token"
+    assert token == "auth-code-token"
 
 
-def test_device_code_provider_requires_user_code_in_flow() -> None:
+def test_oauth_pkce_provider_requires_auth_uri() -> None:
     class DummyConfigService:
         async def get(self):
             return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
@@ -119,20 +130,63 @@ def test_device_code_provider_requires_user_code_in_flow() -> None:
             return []
 
         @staticmethod
-        def initiate_device_flow(scopes):
+        def initiate_auth_code_flow(scopes, redirect_uri):
             del scopes
+            del redirect_uri
             return {"error_description": "flow failed"}
 
-    provider = EntraDeviceCodeProvider(
+    provider = EntraAuthorizationCodePkceProvider(
         config_service=DummyConfigService(),
         app_factory=DummyApp,
     )
     try:
         asyncio.run(provider.resolve(CredentialRequest()))
     except AuthError as exc:
-        assert "Device Code Flow" in str(exc)
+        assert "Authorization Code Flow + PKCE" in str(exc)
     else:
-        raise AssertionError("Expected AuthError when MSAL does not return a user code")
+        raise AssertionError("Expected AuthError when MSAL does not return auth_uri")
+
+
+def test_oauth_pkce_provider_supports_manual_url_when_browser_cannot_open() -> None:
+    class DummyConfigService:
+        async def get(self):
+            return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
+
+    class DummyReceiver:
+        @staticmethod
+        def receive():
+            return {
+                "code": "auth-code",
+                "state": "expected-state",
+            }
+
+    class DummyApp:
+        def __init__(self, client_id: str, authority: str, token_cache=None) -> None:
+            del client_id, authority, token_cache
+
+        @staticmethod
+        def get_accounts():
+            return []
+
+        @staticmethod
+        def initiate_auth_code_flow(scopes, redirect_uri):
+            del scopes, redirect_uri
+            return {"auth_uri": "https://login.microsoftonline.com/authorize", "state": "expected-state"}
+
+        @staticmethod
+        def acquire_token_by_auth_code_flow(auth_flow, auth_response):
+            assert auth_flow.get("state") == "expected-state"
+            assert auth_response.get("code") == "auth-code"
+            return {"access_token": "manual-open-token"}
+
+    provider = EntraAuthorizationCodePkceProvider(
+        config_service=DummyConfigService(),
+        app_factory=DummyApp,
+        browser_opener=lambda _: False,
+        callback_receiver=DummyReceiver(),
+    )
+    token = asyncio.run(provider.resolve(CredentialRequest()))
+    assert token == "manual-open-token"
 
 
 def test_build_authenticated_session_uses_resolved_token(monkeypatch) -> None:

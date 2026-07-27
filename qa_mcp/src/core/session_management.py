@@ -15,8 +15,8 @@ class AuthSessionService:
         effective_token = await self._resolver.resolve(request)
         if not effective_token:
             raise AuthError(
-                "No fue posible adquirir un token delegado de Microsoft Entra ID mediante Device Code Flow. "
-                "Inicie sesion con su cuenta corporativa cuando se muestre el codigo y URL de verificacion."
+                "No fue posible adquirir un token delegado de Microsoft Entra ID mediante Authorization Code + PKCE. "
+                "Inicie sesion con su cuenta corporativa en la ventana de Microsoft y complete el callback local."
             )
 
         identity = self._validator.validate(effective_token, expected_email=request.expected_email)

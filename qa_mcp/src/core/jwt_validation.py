@@ -46,7 +46,7 @@ class JwtTokenValidator:
             return claims
 
         if not env.tenant_id:
-            raise AuthError("MCP_QA_TENANT_ID is required for Microsoft Entra ID validation.")
+            raise AuthError("AZURE_TENANT_ID is required for Microsoft Entra ID validation.")
 
         headers = jwt.get_unverified_header(token)
         kid = headers.get("kid")

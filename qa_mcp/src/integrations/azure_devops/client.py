@@ -5,8 +5,8 @@ from urllib.parse import quote
 
 import httpx
 
-from ...core.config import env
-from ...core.exceptions import AzureDevOpsError
+from core.config import env
+from core.exceptions import AzureDevOpsError
 
 
 class AzureDevOpsClient:
