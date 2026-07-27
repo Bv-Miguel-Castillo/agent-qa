@@ -6,8 +6,8 @@ from .models import LinkBugTemplateInput
 
 
 class LinkBugTemplateService:
-    def execute(self, payload: LinkBugTemplateInput) -> dict:
-        session = token_validator.build_authenticated_session(expected_email=payload.user_email)
+    async def execute(self, payload: LinkBugTemplateInput) -> dict:
+        session = await token_validator.build_authenticated_session(expected_email=payload.user_email)
         token_validator.authorize_tool("link_bug_template", session.identity)
         client = AzureDevOpsClient(
             session.access_token,
@@ -156,3 +156,4 @@ class LinkBugTemplateService:
             relation_patch,
             content_type="application/json-patch+json",
         )
+

@@ -19,7 +19,7 @@ def register_generate_qa_report(mcp: FastMCP) -> None:
             "should decode 'ContentBase64' and save it as 'FileName'. No local commands are required."
         ),
     )
-    def generate_qa_report(
+    async def generate_qa_report(
         project: str,
         test_plan_id: int,
         user_email: str | None = None,
@@ -33,4 +33,5 @@ def register_generate_qa_report(mcp: FastMCP) -> None:
             include_evidence=include_evidence,
             report_date=report_date,
         )
-        return service.execute(payload)
+        return await service.execute(payload)
+

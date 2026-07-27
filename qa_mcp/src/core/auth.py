@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from .auth_contracts import AuthenticatedSession, CredentialRequest, TokenIdentity
 from .auth_context import normalize_access_token
@@ -8,7 +8,7 @@ from .jwt_validation import JwtTokenValidator
 from .session_management import AuthSessionService
 
 
-async def _build_default_session_service() -> AuthSessionService:
+def _build_default_session_service() -> AuthSessionService:
     resolver = CredentialProviderChain([EntraDeviceCodeProvider()])
     return AuthSessionService(resolver, JwtTokenValidator())
 
@@ -21,12 +21,12 @@ class TokenValidator:
     def validate(self, access_token: str, expected_email: str | None = None) -> TokenIdentity:
         return JwtTokenValidator().validate(access_token, expected_email=expected_email)
 
-    def build_authenticated_session(
+    async def build_authenticated_session(
         self,
         expected_email: str | None = None,
     ) -> AuthenticatedSession:
         request = CredentialRequest(expected_email=expected_email)
-        return self._session_service.build_authenticated_session(request)
+        return await self._session_service.build_authenticated_session(request)
 
     def authorize_tool(self, tool_name: str, identity: TokenIdentity) -> None:
         self._authorization.authorize(tool_name, identity)

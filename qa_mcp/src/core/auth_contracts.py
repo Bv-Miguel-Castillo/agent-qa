@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -26,5 +26,5 @@ class CredentialRequest:
 
 
 class CredentialProvider(Protocol):
-    def resolve(self, request: CredentialRequest) -> str | None:
+    async def resolve(self, request: CredentialRequest) -> str | None:
         ...

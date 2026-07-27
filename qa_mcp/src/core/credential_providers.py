@@ -43,7 +43,7 @@ class EntraDeviceCodeConfigService:
             return self._cached
 
         client_id = await kv("MCPQA-ADO-CLIENT-ID") #(self._keyvault_client.get_secret(env.DEVICE_CODE_CLIENT_ID_SECRET_NAME) or "").strip()
-        tenant_id = await kv("MCPQA-ADO-TENAT-ID")#(self._keyvault_client.get_secret(env.DEVICE_CODE_TENANT_ID_SECRET_NAME) or "").strip()
+        tenant_id = await kv("MCPQA-ADO-TENANT-ID")#(self._keyvault_client.get_secret(env.DEVICE_CODE_TENANT_ID_SECRET_NAME) or "").strip()
 
         if not client_id or not tenant_id:
             raise AuthError(

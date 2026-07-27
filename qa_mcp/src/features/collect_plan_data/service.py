@@ -13,8 +13,8 @@ from .models import CollectPlanDataInput
 
 
 class CollectPlanDataService:
-    def execute(self, payload: CollectPlanDataInput) -> dict:
-        session = token_validator.build_authenticated_session(expected_email=payload.user_email)
+    async def execute(self, payload: CollectPlanDataInput) -> dict:
+        session = await token_validator.build_authenticated_session(expected_email=payload.user_email)
         token_validator.authorize_tool("collect_plan_data", session.identity)
         client = AzureDevOpsClient(
             session.access_token,
@@ -300,3 +300,4 @@ class CollectPlanDataService:
             if work_item_type == "bug":
                 return str(bug_id)
         return None
+

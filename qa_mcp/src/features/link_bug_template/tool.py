@@ -9,11 +9,11 @@ from .service import LinkBugTemplateService
 def register_link_bug_template(mcp: FastMCP) -> None:
     service = LinkBugTemplateService()
 
-    @mcp.tool(name="link_bug_template",
-              description="Manages Azure DevOps Bug work items by creating, updating, and linking defects to User Stories and Test Cases. Use this tool to register test failures as bugs, maintain defect information, and establish QA traceability relationships."
-            )
-    
-    def link_bug_template(
+    @mcp.tool(
+        name="link_bug_template",
+        description="Manages Azure DevOps Bug work items by creating, updating, and linking defects to User Stories and Test Cases. Use this tool to register test failures as bugs, maintain defect information, and establish QA traceability relationships.",
+    )
+    async def link_bug_template(
         project: str,
         user_email: str | None = None,
         action: str = "link",
@@ -45,4 +45,4 @@ def register_link_bug_template(mcp: FastMCP) -> None:
             effort=effort,
             test_case_id=test_case_id,
         )
-        return service.execute(payload)
+        return await service.execute(payload)

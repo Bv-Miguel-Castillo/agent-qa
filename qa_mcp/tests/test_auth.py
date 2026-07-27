@@ -1,14 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
-from core.auth_contracts import TokenIdentity
 from core.auth import token_validator
-from core.auth_contracts import CredentialRequest
-from core.credential_providers import (
-    EntraDeviceCodeConfigService,
-    EntraDeviceCodeProvider,
-)
+from core.auth_contracts import CredentialRequest, TokenIdentity
+from core.credential_providers import EntraDeviceCodeConfigService, EntraDeviceCodeProvider
 from core.exceptions import AuthError
 from integrations.azure_devops.client import AzureDevOpsClient
 
@@ -23,7 +21,7 @@ def test_device_code_config_service_reads_required_secrets() -> None:
             return ""
 
     service = EntraDeviceCodeConfigService(keyvault_client=DummyKeyVaultClient())
-    config = service.get()
+    config = asyncio.run(service.get())
 
     assert config.client_id == "ado-client-id"
     assert config.tenant_id == "ado-tenant-id"
@@ -37,7 +35,7 @@ def test_device_code_config_service_raises_when_secrets_missing() -> None:
 
     service = EntraDeviceCodeConfigService(keyvault_client=DummyKeyVaultClient())
     try:
-        service.get()
+        asyncio.run(service.get())
     except AuthError as exc:
         assert "MCPQA-ADO-CLIENT-ID" in str(exc)
         assert "MCPQA-ADO-TENANT-ID" in str(exc)
@@ -47,7 +45,7 @@ def test_device_code_config_service_raises_when_secrets_missing() -> None:
 
 def test_device_code_provider_prefers_silent_token() -> None:
     class DummyConfigService:
-        def get(self):
+        async def get(self):
             return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
 
     class DummyApp:
@@ -69,13 +67,13 @@ def test_device_code_provider_prefers_silent_token() -> None:
         config_service=DummyConfigService(),
         app_factory=DummyApp,
     )
-    token = provider.resolve(CredentialRequest())
+    token = asyncio.run(provider.resolve(CredentialRequest()))
     assert token == "silent-token"
 
 
 def test_device_code_provider_returns_device_flow_token() -> None:
     class DummyConfigService:
-        def get(self):
+        async def get(self):
             return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
 
     class DummyApp:
@@ -103,13 +101,13 @@ def test_device_code_provider_returns_device_flow_token() -> None:
         config_service=DummyConfigService(),
         app_factory=DummyApp,
     )
-    token = provider.resolve(CredentialRequest())
+    token = asyncio.run(provider.resolve(CredentialRequest()))
     assert token == "device-token"
 
 
 def test_device_code_provider_requires_user_code_in_flow() -> None:
     class DummyConfigService:
-        def get(self):
+        async def get(self):
             return type("Config", (), {"client_id": "app-id", "tenant_id": "tenant-id"})()
 
     class DummyApp:
@@ -130,7 +128,7 @@ def test_device_code_provider_requires_user_code_in_flow() -> None:
         app_factory=DummyApp,
     )
     try:
-        provider.resolve(CredentialRequest())
+        asyncio.run(provider.resolve(CredentialRequest()))
     except AuthError as exc:
         assert "Device Code Flow" in str(exc)
     else:
@@ -138,11 +136,11 @@ def test_device_code_provider_requires_user_code_in_flow() -> None:
 
 
 def test_build_authenticated_session_uses_resolved_token(monkeypatch) -> None:
-    monkeypatch.setattr(
-        token_validator._session_service._resolver,
-        "resolve",
-        lambda request: "delegated-token",
-    )
+    async def fake_resolve(request):
+        del request
+        return "delegated-token"
+
+    monkeypatch.setattr(token_validator._session_service._resolver, "resolve", fake_resolve)
     monkeypatch.setattr(
         token_validator._session_service._validator,
         "validate",
@@ -162,7 +160,7 @@ def test_build_authenticated_session_uses_resolved_token(monkeypatch) -> None:
         ),
     )
 
-    session = token_validator.build_authenticated_session(expected_email="user@example.com")
+    session = asyncio.run(token_validator.build_authenticated_session(expected_email="user@example.com"))
 
     assert session.access_token == "delegated-token"
     assert session.identity.email == "user@example.com"
@@ -199,3 +197,5 @@ def test_azure_devops_client_uses_bearer_token_passthrough(monkeypatch) -> None:
 
     assert captured["headers"]["Authorization"] == "Bearer delegated-token"
     assert "sessiontokens" not in str(captured["url"])
+
+
