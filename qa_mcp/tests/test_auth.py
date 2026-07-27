@@ -3,14 +3,14 @@ from __future__ import annotations
 import httpx
 
 from core.auth_contracts import TokenIdentity
-from mcp_agente_qa.core.auth import token_validator
-from mcp_agente_qa.core.auth_contracts import CredentialRequest
-from mcp_agente_qa.core.credential_providers import (
+from core.auth import token_validator
+from core.auth_contracts import CredentialRequest
+from core.credential_providers import (
     EntraDeviceCodeConfigService,
     EntraDeviceCodeProvider,
 )
-from mcp_agente_qa.core.exceptions import AuthError
-from mcp_agente_qa.integrations.azure_devops.client import AzureDevOpsClient
+from core.exceptions import AuthError
+from integrations.azure_devops.client import AzureDevOpsClient
 
 
 def test_device_code_config_service_reads_required_secrets() -> None:

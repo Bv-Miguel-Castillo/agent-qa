@@ -1,4 +1,4 @@
-from mcp_agente_qa.utils import clean_html, parse_steps_xml
+from utils import clean_html, parse_steps_xml
 
 
 def test_clean_html() -> None:

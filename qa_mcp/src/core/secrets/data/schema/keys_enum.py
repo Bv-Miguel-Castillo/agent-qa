@@ -1,0 +1,12 @@
+import enum
+
+
+class SecretKeysEnum(str, enum.Enum):
+    API_KEY = "API-KEY"
+    API_KEY_DOC = "API-KEY-DOC"
+    API_KEY_PUBLIC = "API-KEY-PUBLIC"
+    AZURE_BOT_CLIENT_ID = "AZURE-BOT-CLIENT-ID"
+    AZURE_BOT_CLIENT_SECRET = "AZURE-BOT-CLIENT-SECRET"
+    COSMOS_KEY = "COSMOS-KEY"
+    COSMOS_URI = "COSMOS-URI"
+    

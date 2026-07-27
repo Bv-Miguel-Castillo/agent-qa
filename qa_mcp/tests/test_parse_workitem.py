@@ -1,8 +1,8 @@
 ﻿import json
 from pathlib import Path
 
-from mcp_agente_qa.features.parse_workitem.models import ParseWorkitemInput
-from mcp_agente_qa.features.parse_workitem.service import ParseWorkitemService
+from features.parse_workitem.models import ParseWorkitemInput
+from features.parse_workitem.service import ParseWorkitemService
 
 
 def test_parse_workitem_success(tmp_path: Path) -> None:

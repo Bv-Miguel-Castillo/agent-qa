@@ -26,3 +26,8 @@ azure-keyvault-secrets>=4.0.0,<5.0.0
 # Integration of OpenCensus with Azure Monitor.
 # Allows tracing and telemetry data (like spans, metrics) to be sent to Azure Application Insights.
 opencensus-ext-azure>=1.0.0,<2.0.0
+
+# fastapi:
+# A modern, fast (high-performance), web framework for building APIs with Python 3.7+.
+# Used as the main API engine in this application.
+fastapi[standard]>=0.135.0,<0.136.0

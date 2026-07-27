@@ -1,8 +1,8 @@
 from pathlib import Path
 from zipfile import ZipFile
 
-from mcp_agente_qa.features.regenerate_base_template.models import RegenerateBaseTemplateInput
-from mcp_agente_qa.features.regenerate_base_template.service import RegenerateBaseTemplateService
+from features.regenerate_base_template.models import RegenerateBaseTemplateInput
+from features.regenerate_base_template.service import RegenerateBaseTemplateService
 
 
 def _make_minimal_docx(path: Path) -> None:

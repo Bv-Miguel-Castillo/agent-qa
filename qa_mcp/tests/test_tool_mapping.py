@@ -1,4 +1,4 @@
-﻿from mcp_agente_qa.tool_mapping import TOOL_MAPPING
+﻿from tool_mapping import TOOL_MAPPING
 
 
 def test_mapping_is_one_to_one() -> None:

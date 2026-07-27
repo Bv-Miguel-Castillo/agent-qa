@@ -1,8 +1,8 @@
 from pathlib import Path
 from zipfile import ZipFile
 
-from mcp_agente_qa.features.extract_docx_text.models import ExtractDocxTextInput
-from mcp_agente_qa.features.extract_docx_text.service import ExtractDocxTextService
+from features.extract_docx_text.models import ExtractDocxTextInput
+from features.extract_docx_text.service import ExtractDocxTextService
 
 
 def test_extract_docx_text_success(tmp_path: Path) -> None:
