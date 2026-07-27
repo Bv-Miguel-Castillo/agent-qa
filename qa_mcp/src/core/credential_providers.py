@@ -19,9 +19,9 @@ class CredentialProviderChain:
     def __init__(self, providers: list[CredentialProvider]) -> None:
         self._providers = providers
 
-    def resolve(self, request: CredentialRequest) -> str | None:
+    async def resolve(self, request: CredentialRequest) -> str | None:
         for provider in self._providers:
-            token = provider.resolve(request)
+            token = await provider.resolve(request)
             if token:
                 return token
         return None
@@ -65,10 +65,10 @@ class EntraDeviceCodeProvider:
         self._app_factory = app_factory or msal.PublicClientApplication
         self._token_cache = msal.SerializableTokenCache()
 
-    def resolve(self, request: CredentialRequest) -> str | None:
+    async def resolve(self, request: CredentialRequest) -> str | None:
         del request
 
-        settings = self._config_service.get()
+        settings = await self._config_service.get()
         authority = f"https://login.microsoftonline.com/{settings.tenant_id}"
         app = self._app_factory(
             client_id=settings.client_id,

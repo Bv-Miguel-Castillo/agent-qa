@@ -11,8 +11,8 @@ class AuthSessionService:
         self._resolver = resolver
         self._validator = validator
 
-    def build_authenticated_session(self, request: CredentialRequest) -> AuthenticatedSession:
-        effective_token = self._resolver.resolve(request)
+    async def build_authenticated_session(self, request: CredentialRequest) -> AuthenticatedSession:
+        effective_token = await self._resolver.resolve(request)
         if not effective_token:
             raise AuthError(
                 "No fue posible adquirir un token delegado de Microsoft Entra ID mediante Device Code Flow. "

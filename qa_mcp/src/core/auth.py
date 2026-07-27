@@ -8,7 +8,7 @@ from .jwt_validation import JwtTokenValidator
 from .session_management import AuthSessionService
 
 
-def _build_default_session_service() -> AuthSessionService:
+async def _build_default_session_service() -> AuthSessionService:
     resolver = CredentialProviderChain([EntraDeviceCodeProvider()])
     return AuthSessionService(resolver, JwtTokenValidator())
 
