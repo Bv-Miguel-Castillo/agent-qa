@@ -111,7 +111,8 @@ class LocalAuthorizationCodeReceiver:
             server = HTTPServer((server_host, server_port), CallbackHandler)
         except OSError as exc:
             raise AuthError(
-                f"No fue posible iniciar el callback local para PKCE en {server_host}:{server_port}."
+                f"No fue posible iniciar el callback local para PKCE en {server_host}:{server_port}. "
+                "Verifique si el puerto ya esta en uso por otro proceso o por otra autenticacion en curso."
             ) from exc
 
         thread = Thread(target=server.serve_forever, daemon=True)
@@ -143,6 +144,7 @@ class EntraAuthorizationCodePkceProvider:
         self._browser_opener = browser_opener or webbrowser.open
         self._callback_receiver = callback_receiver
         self._token_cache = msal.SerializableTokenCache()
+        self._interactive_auth_lock = asyncio.Lock()
 
     async def resolve(self, request: CredentialRequest) -> str | None:
         del request
@@ -167,35 +169,43 @@ class EntraAuthorizationCodePkceProvider:
             if silent_result and silent_result.get("access_token"):
                 return normalize_access_token(silent_result["access_token"])
 
-        auth_flow = app.initiate_auth_code_flow(
-            scopes=env.entra_scopes,
-            redirect_uri=redirect_uri,
-        )
-        auth_uri = auth_flow.get("auth_uri")
-        if not auth_uri:
-            raise AuthError("No se pudo iniciar Authorization Code Flow + PKCE en Microsoft Entra ID.")
+        # Prevent concurrent interactive logins from competing for the same localhost callback port.
+        async with self._interactive_auth_lock:
+            accounts = app.get_accounts()
+            if accounts:
+                silent_result = app.acquire_token_silent(scopes=env.entra_scopes, account=accounts[0])
+                if silent_result and silent_result.get("access_token"):
+                    return normalize_access_token(silent_result["access_token"])
 
-        logger.warning(
-            "Inicie sesion para autorizar MCP Agente QA: se abrira la pagina de Microsoft Entra ID."
-        )
+            auth_flow = app.initiate_auth_code_flow(
+                scopes=env.entra_scopes,
+                redirect_uri=redirect_uri,
+            )
+            auth_uri = auth_flow.get("auth_uri")
+            if not auth_uri:
+                raise AuthError("No se pudo iniciar Authorization Code Flow + PKCE en Microsoft Entra ID.")
 
-        opened = await asyncio.to_thread(self._browser_opener, auth_uri)
-        if not opened:
             logger.warning(
-                "No fue posible abrir el navegador automaticamente. Abra esta URL manualmente en su navegador: "
-                f"{auth_uri}"
+                "Inicie sesion para autorizar MCP Agente QA: se abrira la pagina de Microsoft Entra ID."
             )
 
-        try:
-            auth_response = await asyncio.to_thread(callback_receiver.receive)
-        except AuthError as exc:
-            raise AuthError(
-                "No se completo la autenticacion con Microsoft Entra ID. "
-                "Si no se abrio automaticamente, abra manualmente la URL de inicio de sesion y reintente. "
-                f"URL: {auth_uri}. Detalle: {exc}"
-            ) from exc
+            opened = await asyncio.to_thread(self._browser_opener, auth_uri)
+            if not opened:
+                logger.warning(
+                    "No fue posible abrir el navegador automaticamente. Abra esta URL manualmente en su navegador: "
+                    f"{auth_uri}"
+                )
 
-        result = app.acquire_token_by_auth_code_flow(auth_flow, auth_response)
+            try:
+                auth_response = await asyncio.to_thread(callback_receiver.receive)
+            except AuthError as exc:
+                raise AuthError(
+                    "No se completo la autenticacion con Microsoft Entra ID. "
+                    "Si no se abrio automaticamente, abra manualmente la URL de inicio de sesion y reintente. "
+                    f"URL: {auth_uri}. Detalle: {exc}"
+                ) from exc
+
+            result = app.acquire_token_by_auth_code_flow(auth_flow, auth_response)
 
         access_token = normalize_access_token((result or {}).get("access_token"))
         if access_token:
