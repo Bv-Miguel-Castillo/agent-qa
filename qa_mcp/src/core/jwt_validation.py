@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict
 
 import httpx
@@ -10,6 +11,8 @@ from .auth_contracts import TokenIdentity
 from .auth_context import normalize_access_token
 from .config import env
 from .exceptions import AuthError
+
+logger = logging.getLogger(__name__)
 
 
 class JwtTokenValidator:
@@ -39,7 +42,19 @@ class JwtTokenValidator:
 
     def _decode_claims(self, token: str) -> Dict[str, Any]:
         if env.allow_insecure_token_decode:
-            claims = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+            # Defense in depth: never allow the unsigned decode path in production,
+            # even if ALLOW_INSECURE_TOKEN_DECODE is misconfigured.
+            if (env.ENVIRONMENT or "").strip().upper() == "PRODUCTION":
+                raise AuthError(
+                    "Insecure token decode is not permitted when ENVIRONMENT=PRODUCTION."
+                )
+            logger.warning(
+                "Decoding JWT without signature verification (ALLOW_INSECURE_TOKEN_DECODE=true). "
+                "This must only be used in local/dev environments."
+            )
+            claims = jwt.decode(
+                token, options={"verify_signature": False, "verify_aud": False}  # NOSONAR: gated to non-production dev/test use only
+            )
             token_tid = claims.get("tid")
             if token_tid and env.tenant_id and token_tid.lower() != env.tenant_id.lower():
                 raise AuthError("Token tenant mismatch")
