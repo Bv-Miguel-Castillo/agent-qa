@@ -53,7 +53,7 @@ class JwtTokenValidator:
                 "This must only be used in local/dev environments."
             )
             claims = jwt.decode(
-                token, options={"verify_signature": False, "verify_aud": False}  # NOSONAR: gated to non-production dev/test use only
+                token, options={"verify_signature": False, "verify_aud": False}  # NOSONAR
             )
             token_tid = claims.get("tid")
             if token_tid and env.tenant_id and token_tid.lower() != env.tenant_id.lower():
