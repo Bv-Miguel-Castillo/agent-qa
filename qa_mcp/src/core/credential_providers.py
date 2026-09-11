@@ -9,6 +9,8 @@ from urllib.parse import parse_qs, urlparse
 import webbrowser
 
 import msal
+from azure.core.exceptions import ClientAuthenticationError
+from azure.identity.aio import AzureCliCredential
 
 from .auth_contracts import CredentialProvider, CredentialRequest
 from .auth_context import normalize_access_token
@@ -30,6 +32,21 @@ class CredentialProviderChain:
             if token:
                 return token
         return None
+
+
+class AzureCliCredentialProvider:
+    """Reuses an existing `az login` session instead of the interactive Entra PKCE flow."""
+
+    async def resolve(self, request: CredentialRequest) -> str | None:
+        del request
+        scope = env.entra_scopes[0]
+        try:
+            async with AzureCliCredential() as credential:
+                token = await credential.get_token(scope)
+        except (ClientAuthenticationError, OSError) as exc:
+            logger.warning(f"Sesion de 'az login' no disponible, se usara el flujo interactivo: {exc}")
+            return None
+        return normalize_access_token(token.token)
 
 
 @dataclass(frozen=True)
